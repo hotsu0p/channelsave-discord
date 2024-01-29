@@ -1,83 +1,60 @@
-const { Client, Intents } = require('discord.js');
-const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES] });
-
-const token = 'MTIwMDkzODgzNDc1NDU1NjAxNg.G5Voo1.OeahO1uZjA9Lm01fO2ilR5sC62fnFu-NeLxcHU';
-
-client.on('ready', () => {
-    console.log(`Logged in as ${client.user.tag}!`);
-});
-const targetWords = [
-    '**nuked**',
-    '*nuked*',
-    '<u> nuked <u>',
-    '~~nuked~~',
-    'nuked',
-    'uᴉʞǝu',
-    'Nuked',
-    'Ⓝⓤⓚⓔⓓ',
-    '𝕟𝕦𝕜𝕖𝕕',
-    '𝓷𝓾𝓴𝓮𝓭',
-    'ℓųқɛɖ'
-];
-
-
-client.on('message', async(message) => {
-    if (message.content === '!cn') {
-        const foundChannel = message.guild.channels.cache.find(ch => {
-            return targetWords.some(word => ch.name.toLowerCase().includes(word.toLowerCase()));
-        });
-
-        if (foundChannel && foundChannel.deletable) {
-            await foundChannel.delete();
-            message.channel.send('Deleted channel matching your criteria.');
-        } else {
-            message.channel.send('No channel found matching your criteria.');
-        }
-    }
-});
 const fs = require('fs');
 
-client.on('message', async(message) => {
-    if (message.content === '!save') {
-        try {
-            const channels = message.guild.channels.cache.map(channel => ({
-                id: channel.id,
-                name: channel.name,
-                position: channel.position,
-                type: channel.type,
-                // Add other properties as needed (e.g., topic, permissions, etc.)
-            }));
+function saveChannels(guild, filePath) {
+    const savedData = {
+        channels: [],
+        categories: [],
+    };
 
-            fs.writeFileSync('channels.json', JSON.stringify(channels));
-            message.channel.send('Channels saved successfully!');
-        } catch (error) {
-            console.error('Error saving channels:', error);
-            message.channel.send('An error occurred while saving channels.');
-        }
-    } else if (message.content === '!load') {
-        try {
-            const savedChannels = JSON.parse(fs.readFileSync('channels.json'));
+    guild.channels.cache.forEach(channel => {
+        savedData.channels.push({
+            id: channel.id,
+            name: channel.name,
+            position: channel.position,
+            type: channel.type,
+        });
+    });
 
-            for (const savedChannel of savedChannels) {
-                const existingChannel = message.guild.channels.cache.get(savedChannel.id);
-                if (!existingChannel) {
-                    const newChannel = await message.guild.channels.create(savedChannel.name, {
-                        type: savedChannel.type,
-                        position: savedChannel.position,
-                        // Set other properties based on saved data
-                    });
-                    console.log(`Created channel: ${newChannel.name}`);
-                } else {
-                    // Update existing channel properties if needed
-                    console.log(`Channel already exists: ${existingChannel.name}`);
-                }
+    guild.channels.cache
+        .filter(channel => channel.type === 'GUILD_CATEGORY')
+        .forEach(category => {
+            savedData.categories.push({
+                id: category.id,
+                name: category.name,
+            });
+        });
+
+    fs.writeFileSync(filePath, JSON.stringify(savedData));
+    console.log('Channels and categories saved successfully!');
+}
+
+function loadChannels(guild, filePath) {
+    try {
+        const savedData = JSON.parse(fs.readFileSync(filePath));
+
+        savedData.channels.forEach(savedChannel => {
+            const existingChannel = guild.channels.cache.find(channel => channel.id === savedChannel.id || channel.name === savedChannel.name);
+            if (!existingChannel) {
+                guild.channels.create(savedChannel.name, {
+                    type: savedChannel.type,
+                    position: savedChannel.position,
+                });
             }
+        });
 
-            message.channel.send('Channels loaded successfully!');
-        } catch (error) {
-            console.error('Error loading channels:', error);
-            message.channel.send('An error occurred while loading channels.');
-        }
+        savedData.categories.forEach(savedCategory => {
+            const existingCategory = guild.channels.cache.find(channel => channel.id === savedCategory.id || channel.name === savedCategory.name);
+            if (!existingCategory) {
+                guild.channels.create(savedCategory.name, {
+                    type: 'GUILD_CATEGORY',
+                });
+            }
+        });
+
+        console.log('Channels and categories loaded successfully!');
+    } catch (error) {
+        console.error('Error loading channels and categories:', error);
     }
-});
-client.login(token);
+}
+
+module.exports = { saveChannels, loadChannels };
